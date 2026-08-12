@@ -1,211 +1,106 @@
-# 🌿 Carbon Guardian Project
+# Carbon Guardian
 
-<p align="center">
-  Air quality monitoring system using ESP32, MQ-7, MQ-2 and OLED SSD1306
-</p>
+Hệ thống giám sát chất lượng không khí sử dụng ESP32, cảm biến MQ-7 (CO) và MQ-2 (gas/LPG), hiển thị dữ liệu real-time trên màn OLED SSD1306.
 
-<p align="center">
-  <img alt="Platform" src="https://img.shields.io/badge/Platform-ESP32-00979D?logo=espressif&logoColor=white">
-  <img alt="Language" src="https://img.shields.io/badge/Language-Arduino%20C%2B%2B-00979D?logo=arduino&logoColor=white">
-  <img alt="Display" src="https://img.shields.io/badge/OLED-SSD1306-blue">
-  <img alt="Sensors" src="https://img.shields.io/badge/Sensors-MQ--7%20%7C%20MQ--2-success">
-  <img alt="Version" src="https://img.shields.io/badge/Version-v1.4-orange">
-  <img alt="Status" src="https://img.shields.io/badge/Status-Active-brightgreen">
-</p>
+Đồ án phục vụ mục đích học tập và demo. Cảm biến dòng MQ phù hợp cho giám sát tương đối, không thay thế thiết bị đo khí đã hiệu chuẩn công nghiệp.
 
----
+## Tính năng
 
-## 📖 Table of Contents
+- Đọc dữ liệu từ 2 cảm biến khí (MQ-7, MQ-2)
+- Hiển thị trên OLED: giá trị ppm và mức cảnh báo (SAFE / WARN / DANGER) cho từng kênh, kèm mức tổng hợp (OVERALL)
+- Tự động calibrate khi khởi động
+- Lọc nhiễu bằng EMA (Exponential Moving Average)
+- Chống dao động trạng thái bằng hysteresis
+- Cảnh báo bằng LED và buzzer khi OVERALL = DANGER
 
-- [Introduction](#-introduction)
-- [Features](#-features)
-- [Hardware](#-hardware)
-- [Pin Mapping](#-pin-mapping)
-- [Required Libraries](#-required-libraries)
-- [How It Works](#-how-it-works)
-- [Alert Thresholds](#-alert-thresholds)
-- [Setup & Upload](#-setup--upload)
-- [Serial Monitor](#-serial-monitor)
-- [Quick Customization](#-quick-customization)
-- [Technical Notes](#-technical-notes)
-- [Future Development](#-future-development)
-- [License](#-license)
-
----
-
-## 🧠 Introduction
-
-**Carbon Guardian** is a project for measuring and alerting on air gas levels using:
-- **MQ-7** to monitor **CO**
-- **MQ-2** to monitor **Gas/LPG**
-- **OLED SSD1306** to display real-time data
-- **LED + Buzzer** to alert when danger is detected
-
-This project is suitable for IoT/Embedded learning, lab demonstrations, or basic indoor environmental monitoring.
-
----
-
-## ✨ Features
-
-- Reads data from 2 gas sensors (MQ-7 and MQ-2)
-- Displays on OLED:
-  - CO (ppm), Gas (ppm)
-  - Per-channel level: `SAFE / WARN / DANGER`
-  - Combined `OVERALL` level
-- Auto-calibration on startup (INIT)
-- Noise filtering via **EMA**
-- Level debouncing via **hysteresis**
-- Alert only when `OVERALL = DANGER`:
-  - LED ON
-  - Buzzer beeps **100ms ON / 100ms OFF**
-
----
-
-## 🧰 Hardware
+## Phần cứng
 
 - ESP32
-- MQ-7 Gas Sensor Module
-- MQ-2 Gas Sensor Module
-- OLED SSD1306 I2C 128x64 (address `0x3C`)
-- LED + current-limiting resistor
-- Active buzzer
-- Jumper wires, breadboard, stable power supply
+- Cảm biến MQ-7 và MQ-2
+- Màn OLED SSD1306 I2C 128x64 (địa chỉ 0x3C)
+- LED và trở hạn dòng
+- Buzzer loại active
+- Dây cắm, breadboard, nguồn cấp ổn định
 
----
+Lưu ý: nguồn cấp không ổn định là một trong những nguyên nhân phổ biến gây sai lệch số liệu đọc từ cảm biến.
 
-## 🔌 Pin Mapping
+## Sơ đồ chân
 
-| Component | ESP32 Pin |
+| Linh kiện | Chân ESP32 |
 |---|---|
-| MQ-7 (AO) | **GPIO 35** |
-| MQ-2 (AO) | **GPIO 34** |
-| LED | **GPIO 25** |
-| Buzzer (active) | **GPIO 26** |
-| OLED SDA | **GPIO 21** |
-| OLED SCL | **GPIO 22** |
+| MQ-7 (AO) | GPIO 35 |
+| MQ-2 (AO) | GPIO 34 |
+| LED | GPIO 25 |
+| Buzzer | GPIO 26 |
+| OLED SDA | GPIO 21 |
+| OLED SCL | GPIO 22 |
 
-> Note: GPIO 34/35 are input-only pins (suitable for ADC reading).
+GPIO 34 và 35 là chân chỉ đọc (input-only), phù hợp cho việc đọc ADC.
 
----
+## Thư viện
 
-## 📚 Required Libraries
+Cài đặt qua Library Manager trong Arduino IDE:
+- Adafruit GFX Library
+- Adafruit SSD1306
+- Wire (có sẵn trong core)
 
-Install via Library Manager in Arduino IDE:
+## Nguyên lý hoạt động
 
-- `Adafruit GFX Library`
-- `Adafruit SSD1306`
-- `Wire` (included with core)
+**1. Calibrate khi khởi động**
+Hệ thống lấy 80 mẫu (khoảng 16 giây, chu kỳ 200ms) để tính giá trị điện trở tham chiếu R0 cho từng cảm biến.
 
----
+**2. Đo và xử lý dữ liệu**
+Đọc giá trị ADC từ hai cảm biến, tính điện trở Rs, quy đổi sang nồng độ ppm theo đường cong cảm biến, sau đó làm mượt bằng bộ lọc EMA (alpha = 0.15).
 
-## ⚙️ How It Works
+**3. Phân loại mức cảnh báo**
+So sánh giá trị đã lọc với ngưỡng WARN/DANGER. Áp dụng hysteresis để tránh dao động trạng thái khi giá trị nằm gần ngưỡng.
 
-### 1) INIT Calibration (startup)
-- Collects `INIT_SAMPLES = 80` samples (~16 seconds, 200ms interval)
-- Computes averages to derive:
-  - `R0_MQ7`
-  - `R0_MQ2`
-- Once enough samples are collected → switches to real-time measurement mode
+**4. Cảnh báo**
+Mức tổng hợp OVERALL được tính bằng max(mức CO, mức gas). Hệ thống chỉ kích hoạt cảnh báo khi OVERALL = DANGER.
 
-### 2) Measurement & Processing
-- Reads ADC values from MQ-7 and MQ-2
-- Calculates sensor resistance `Rs`
-- Converts to ppm using the curve function
-- Smooths values using EMA (`ALPHA = 0.15`)
+## Ngưỡng cảnh báo
 
-### 3) Level Classification
-- Applies `WARN/DANGER` thresholds
-- Uses hysteresis to reduce state oscillation when values are near a threshold
-
-### 4) Alerting
-- `OVERALL = max(levelCO, levelGas)`
-- Alert is triggered only when `OVERALL == DANGER`
-
----
-
-## 🚨 Alert Thresholds
-
-| Measurement | WARN | DANGER |
+| | WARN | DANGER |
 |---|---:|---:|
 | CO | 20 ppm | 80 ppm |
-| GAS | 800 ppm | 2500 ppm |
+| Gas | 800 ppm | 2500 ppm |
 
----
+## Cài đặt và nạp chương trình
 
-## 🚀 Setup & Upload
+1. Mở file `.ino` bằng Arduino IDE
+2. Chọn đúng board ESP32 và cổng COM tương ứng
+3. Cài đặt các thư viện được liệt kê ở trên
+4. Nạp chương trình (Upload)
+5. Mở Serial Monitor với baudrate 115200 để theo dõi log
 
-1. Open the `.ino` file in Arduino IDE
-2. Select the appropriate ESP32 board
-3. Select the correct COM port
-4. Install all required libraries listed above
-5. Upload the code
-6. Open Serial Monitor at baudrate **115200**
-
----
-
-## 🖥️ Serial Monitor
-
-Example log output:
-```text
+Ví dụ log đầu ra:
+```
 [DATA] CO: 12.3 (SAFE) | GAS: 950.1 (WARN) | OVERALL: WARN | raw7=1234 raw2=1456
 ```
 
-Log information includes:
-- CO/GAS values (ppm)
-- Per-channel level
-- Overall OVERALL level
-- Raw ADC values
+## Các thông số có thể tùy chỉnh
 
----
+| Nhóm | Biến |
+|---|---|
+| Calibrate | `INIT_SAMPLES` |
+| Lọc nhiễu | `ALPHA` |
+| Ngưỡng cảnh báo | `CO_WARN`, `CO_DANGER`, `GAS_WARN`, `GAS_DANGER` |
+| Hysteresis | `HYS_CO`, `HYS_GAS` |
+| Đường cong cảm biến | `MQ7_CO_A`, `MQ7_CO_B`, `MQ2_LPG_A`, `MQ2_LPG_B` |
 
-## 🛠️ Quick Customization
+## Giới hạn kỹ thuật
 
-You can adjust the following variables in the code:
+- Cảm biến dòng MQ phù hợp cho giám sát tương đối và cảnh báo xu hướng, không phải thiết bị đo khí đã hiệu chuẩn công nghiệp.
+- Độ chính xác chịu ảnh hưởng bởi chất lượng nguồn cấp, chất lượng module, nhiệt độ, độ ẩm, và bố trí mạch.
 
-- Calibration:
-  - `INIT_SAMPLES`
-- Filtering:
-  - `ALPHA`
-- Thresholds:
-  - `CO_WARN`, `CO_DANGER`
-  - `GAS_WARN`, `GAS_DANGER`
-- Hysteresis:
-  - `HYS_CO`, `HYS_GAS`
-- Curve coefficients:
-  - `MQ7_CO_A`, `MQ7_CO_B`
-  - `MQ2_LPG_A`, `MQ2_LPG_B`
+## Hướng phát triển
 
----
+- Gửi dữ liệu lên nền tảng IoT (MQTT/Blynk/ThingsBoard)
+- Lưu trữ lịch sử đo (SD card hoặc cloud)
+- Cảnh báo nhiều cấp độ (WARN: beep chậm, DANGER: beep nhanh)
+- Bổ sung cảm biến nhiệt độ/độ ẩm để bù trừ sai số
+- Nút recalibrate trực tiếp trên mạch
 
-## ⚠️ Technical Notes
+## Giấy phép
 
-- MQ-series sensors are suitable for **relative monitoring / trend alerting** and are not a replacement for industrially calibrated gas measurement devices.
-- Accuracy depends on power supply, module quality, temperature/humidity, circuit layout, and environment.
-- The current version is optimized for display stability and practical alerting.
-
----
-
-## 🔮 Future Development
-
-- Send data to MQTT/Blynk/ThingsBoard
-- Log measurement history (SD card/cloud)
-- Multi-level alerts (WARN = slow beep, DANGER = fast beep)
-- Add temperature/humidity sensor for error compensation
-- On-device "Recalibrate" button
-
----
-
-## 📄 License
-
-Recommended to use **MIT License** for easy sharing and reuse.
-
----
-
-## 🤝 Contributing
-
-All contributions are welcome:
-- Optimize filtering algorithms
-- Add support for additional sensors/components
-- Improve measurement accuracy
-- Enhance display interface / dashboard
-- Add IoT features
+Phát hành theo giấy phép MIT.
