@@ -101,6 +101,3 @@ Ví dụ log đầu ra:
 - Bổ sung cảm biến nhiệt độ/độ ẩm để bù trừ sai số
 - Nút recalibrate trực tiếp trên mạch
 
-## Giấy phép
-
-Phát hành theo giấy phép MIT.
